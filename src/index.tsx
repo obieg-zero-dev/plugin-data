@@ -136,12 +136,15 @@ const plugin: PluginFactory = ({ React, ui, store, sdk, icons }) => {
 
     const selectTab = (type: string) => useData.setState({ activeTab: type, selectedId: null, mode: 'list' })
 
+    const allTabs = [...tabs.map(t => ({ id: t.type, label: t.label })), { id: '_options', label: 'Opcje' }]
+
     return (
       <ui.Page><ui.Stack>
-        {tabs.length > 0 && <ui.Tabs variant="lift" tabs={tabs.map(t => ({ id: t.type, label: t.label }))} active={tab || ''} onChange={selectTab} />}
-        {tab && typeDef && <CrudList type={tab} schema={typeDef.schema} selectedId={selectedId}
+        {allTabs.length > 0 && <ui.Tabs variant="lift" tabs={allTabs} active={tab || ''} onChange={t => t === '_options' ? useData.setState({ activeTab: '_options', selectedId: null, mode: 'list' }) : selectTab(t)} />}
+        {tab === '_options' && <OptionsPanel />}
+        {tab && tab !== '_options' && typeDef && <CrudList type={tab} schema={typeDef.schema} selectedId={selectedId}
           onSelect={id => useData.setState({ selectedId: id, mode: 'list' })} onAdd={() => useData.setState({ mode: 'add', selectedId: null })} />}
-        {tab && typeDef && mode === 'add' && <RecordForm schema={typeDef.schema}
+        {tab && tab !== '_options' && typeDef && mode === 'add' && <RecordForm schema={typeDef.schema}
           onSubmit={data => { store.add(tab, data); useData.setState({ mode: 'list' }); sdk.log('Dodano rekord', 'ok') }}
           onCancel={() => useData.setState({ mode: 'list' })} />}
       </ui.Stack></ui.Page>
@@ -257,10 +260,31 @@ const plugin: PluginFactory = ({ React, ui, store, sdk, icons }) => {
     }
   }
 
+  function OptionsPanel() {
+    const metas = store.usePosts('meta') as PostRecord[]
+    const optKeys = metas.filter(m => m.data.opt).map(m => String(m.data.opt))
+    const values: Record<string, string> = {}
+    for (const k of optKeys) values[k] = (store.useOption(k) ?? '') as string
+    const isSecret = (k: string) => /key|secret|token|password/i.test(k)
+
+    return (
+      <ui.Stack>
+        <ui.Text muted size="xs">Opcje ({optKeys.length})</ui.Text>
+        {optKeys.map(k => (
+          <ui.Field key={k} label={k}>
+            <ui.Input type={isSecret(k) ? 'password' : 'text'} value={values[k]}
+              onChange={(e: { target: { value: string } }) => store.setOption(k, e.target.value)} />
+          </ui.Field>
+        ))}
+        {optKeys.length === 0 && <ui.Text muted size="xs">Brak zarejestrowanych opcji. Opcje deklarują pluginy przez defaultOptions w config.json.</ui.Text>}
+      </ui.Stack>
+    )
+  }
+
   sdk.registerView('data.center', { slot: 'center', component: CrudView })
   sdk.registerView('data.right', { slot: 'right', component: DetailPanel })
 
-  return { id: 'data', label: 'Dane', icon: Database, version: '0.3.0' }
+  return { id: 'plugin-data', label: 'Dane', icon: Database, version: '0.3.0' }
 }
 
 export default plugin
